@@ -2,6 +2,7 @@ use libc::{__errno_location, c_int, c_uint, pid_t, syscall, SYS_sched_setattr};
 use std::convert::TryInto;
 use std::mem::size_of;
 use std::result::Result;
+use std::time::Duration;
 
 #[repr(C)]
 pub(crate) struct sched_attr {
@@ -54,9 +55,9 @@ pub enum Target {
 pub fn configure_sched_deadline(
     target: Target,
     sched_flags: SchedFlag,
-    runtime_ns: u64,
-    deadline_ns: u64,
-    period_ns: u64,
+    runtime: Duration,
+    deadline: Duration,
+    period: Duration,
 ) -> Result<(), c_int> {
     let pid: pid_t = match target {
         Target::CallingThread => 0,
@@ -74,11 +75,11 @@ pub fn configure_sched_deadline(
         size: size_of::<sched_attr>().try_into().unwrap(),
         sched_policy: SCHED_DEADLINE.try_into().unwrap(),
         sched_flags: sched_flags as u64,
-        sched_nice: 0,                  // unused
-        sched_priority: 0,              // unused
-        sched_deadline_ns: deadline_ns, // in nanoseconds
-        sched_runtime_ns: runtime_ns,   // in nanoseconds
-        sched_period_ns: period_ns,     // in nanoseconds
+        sched_nice: 0,                                 // unused
+        sched_priority: 0,                             // unused
+        sched_deadline_ns: deadline.as_nanos() as u64, // in nanoseconds
+        sched_runtime_ns: runtime.as_nanos() as u64,   // in nanoseconds
+        sched_period_ns: period.as_nanos() as u64,     // in nanoseconds
     };
 
     match unsafe { sched_setattr(pid, &attr as *const sched_attr, 0) } {
@@ -93,11 +94,12 @@ mod tests {
     use std::convert::TryInto;
     use std::ffi::CString;
     use std::mem::size_of;
+    use std::time::Duration;
 
-    use libc::{__errno_location, perror, sched_yield, EPERM};
+    use libc::{__errno_location, getpid, perror, sched_yield, EPERM};
 
     #[test]
-    fn it_works() {
+    fn test_sched_setattr() {
         let mut attr: super::sched_attr = super::sched_attr {
             size: size_of::<super::sched_attr>().try_into().unwrap(),
             sched_policy: super::SCHED_DEADLINE.try_into().unwrap(),
@@ -120,5 +122,28 @@ mod tests {
             sched_yield();
             perror(CString::new("sched_yield").unwrap().into_raw());
         };
+    }
+
+    #[test]
+    fn test_configure_sched_deadline() {
+        let ret = super::configure_sched_deadline(
+            super::Target::CallingThread,
+            super::SchedFlag::ResetOnFork,
+            Duration::from_nanos(1000 * 1000),
+            Duration::from_nanos(1000 * 1000),
+            Duration::from_nanos(10 * 1000 * 1000),
+        );
+
+        assert_eq!(ret, Err(libc::EPERM));
+
+        let ret = super::configure_sched_deadline(
+            super::Target::PID(unsafe { getpid() }),
+            super::SchedFlag::ResetOnFork,
+            Duration::from_nanos(1000 * 1000),
+            Duration::from_nanos(1000 * 1000),
+            Duration::from_nanos(10 * 1000 * 1000),
+        );
+
+        assert_eq!(ret, Err(libc::EPERM));
     }
 }

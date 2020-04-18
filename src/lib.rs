@@ -74,7 +74,7 @@ pub enum Target {
     PID(pid_t),
 }
 
-pub fn is_sched_deadline_enabled(target: Target) -> Result<(), c_int> {
+pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, c_int> {
     let pid: pid_t = match target {
         Target::CallingThread => 0,
         Target::PID(pid) => pid,
@@ -90,7 +90,7 @@ pub fn is_sched_deadline_enabled(target: Target) -> Result<(), c_int> {
             0,
         )
     } {
-        0 => Ok(()),
+        0 => Ok(attr.sched_policy == SCHED_DEADLINE.try_into().unwrap()),
         -1 => Err(unsafe { *__errno_location() }),
         _ => unreachable!("sched_getattr cannot return anything other than 0 or -1"),
     }
@@ -226,5 +226,12 @@ mod tests {
         );
 
         assert_eq!(ret, Err(libc::EPERM));
+    }
+
+    #[test]
+    fn test_is_sched_deadline_enabled() {
+        let ret = super::is_sched_deadline_enabled(super::Target::CallingThread);
+
+        assert_eq!(ret, Ok(false));
     }
 }

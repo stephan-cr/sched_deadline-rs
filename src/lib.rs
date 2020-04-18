@@ -136,7 +136,9 @@ mod tests {
     use std::time::Duration;
 
     use enumflags2::BitFlags;
-    use libc::{__errno_location, getpid, perror, sched_yield, EPERM, SCHED_OTHER};
+    use libc::{
+        __errno_location, getpid, perror, sched_yield, syscall, SYS_gettid, EPERM, SCHED_OTHER,
+    };
 
     #[test]
     fn test_get_setattr() {
@@ -145,6 +147,18 @@ mod tests {
         let ret = unsafe {
             super::sched_getattr(
                 0,
+                &mut attr as *mut _,
+                size_of::<super::sched_attr>().try_into().unwrap(),
+                0,
+            )
+        };
+
+        assert_eq!(ret, 0);
+        assert_eq!(attr.sched_policy, SCHED_OTHER as u32);
+
+        let ret = unsafe {
+            super::sched_getattr(
+                syscall(SYS_gettid),
                 &mut attr as *mut _,
                 size_of::<super::sched_attr>().try_into().unwrap(),
                 0,
@@ -195,6 +209,16 @@ mod tests {
 
         let ret = super::configure_sched_deadline(
             super::Target::PID(unsafe { getpid() }),
+            super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
+            Duration::from_nanos(1000 * 1000),
+            Duration::from_nanos(1000 * 1000),
+            Duration::from_nanos(10 * 1000 * 1000),
+        );
+
+        assert_eq!(ret, Err(libc::EPERM));
+
+        let ret = super::configure_sched_deadline(
+            super::Target::PID(unsafe { syscall(SYS_gettid) }),
             super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
             Duration::from_nanos(1000 * 1000),
             Duration::from_nanos(1000 * 1000),

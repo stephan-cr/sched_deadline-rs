@@ -131,14 +131,11 @@ pub fn configure_sched_deadline(
 #[cfg(test)]
 mod tests {
     use std::convert::TryInto;
-    use std::ffi::CString;
     use std::mem::{size_of, MaybeUninit};
     use std::time::Duration;
 
     use enumflags2::BitFlags;
-    use libc::{
-        __errno_location, getpid, perror, sched_yield, syscall, SYS_gettid, EPERM, SCHED_OTHER,
-    };
+    use libc::{__errno_location, getpid, sched_yield, syscall, SYS_gettid, EPERM, SCHED_OTHER};
 
     #[test]
     fn test_get_setattr() {
@@ -189,9 +186,7 @@ mod tests {
         assert_eq!(EPERM, unsafe { *__errno_location() });
 
         unsafe {
-            perror(CString::new("sched_setattr").unwrap().into_raw());
             sched_yield();
-            perror(CString::new("sched_yield").unwrap().into_raw());
         };
     }
 

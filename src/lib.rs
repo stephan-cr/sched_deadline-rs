@@ -1,12 +1,13 @@
 use libc::{__errno_location, c_int, c_uint, pid_t, syscall, SYS_sched_getattr, SYS_sched_setattr};
 use std::convert::TryInto;
-use std::mem::{size_of, MaybeUninit};
+use std::mem::size_of;
 use std::result::Result;
 use std::time::Duration;
 
 use enumflags2::BitFlags;
 
 #[repr(C)]
+#[derive(Default)]
 pub(crate) struct sched_attr {
     size: u32,
     sched_policy: u32,
@@ -80,7 +81,7 @@ pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, c_int> {
         Target::PID(pid) => pid,
     };
 
-    let mut attr: sched_attr = unsafe { MaybeUninit::zeroed().assume_init() };
+    let mut attr = sched_attr::default();
 
     match unsafe {
         sched_getattr(
@@ -131,7 +132,7 @@ pub fn configure_sched_deadline(
 #[cfg(test)]
 mod tests {
     use std::convert::TryInto;
-    use std::mem::{size_of, MaybeUninit};
+    use std::mem::size_of;
     use std::time::Duration;
 
     use enumflags2::BitFlags;
@@ -139,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_get_setattr() {
-        let mut attr: super::sched_attr = unsafe { MaybeUninit::zeroed().assume_init() };
+        let mut attr = super::sched_attr::default();
 
         let ret = unsafe {
             super::sched_getattr(

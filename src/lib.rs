@@ -1,5 +1,11 @@
-use libc::{__errno_location, c_int, c_uint, pid_t, syscall, SYS_sched_getattr, SYS_sched_setattr};
+#![warn(rust_2018_idioms)]
+
+use libc::{
+    __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr, SYS_sched_setattr,
+};
 use std::convert::TryInto;
+use std::ffi::CStr;
+use std::fmt;
 use std::mem::size_of;
 use std::result::Result;
 use std::time::Duration;
@@ -59,6 +65,27 @@ pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c
     syscall(SYS_sched_setattr, pid, attr, flags)
 }
 
+#[derive(Debug, PartialEq)]
+pub enum SchedDeadlineError {
+    Syscall(c_int),
+    Logic,
+}
+
+impl fmt::Display for SchedDeadlineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &*self {
+            SchedDeadlineError::Logic => write!(f, "logical error"),
+            SchedDeadlineError::Syscall(error_num) => write!(
+                f,
+                "{}",
+                unsafe { CStr::from_ptr(strerror(*error_num)) }
+                    .to_string_lossy()
+                    .to_owned()
+            ),
+        }
+    }
+}
+
 #[derive(BitFlags, Copy, Clone)]
 #[repr(u8)]
 pub enum SchedFlag {
@@ -75,7 +102,7 @@ pub enum Target {
     PID(pid_t),
 }
 
-pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, c_int> {
+pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, SchedDeadlineError> {
     let pid: pid_t = match target {
         Target::CallingThread => 0,
         Target::PID(pid) => pid,
@@ -92,7 +119,7 @@ pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, c_int> {
         )
     } {
         0 => Ok(attr.sched_policy == SCHED_DEADLINE.try_into().unwrap()),
-        -1 => Err(unsafe { *__errno_location() }),
+        -1 => Err(SchedDeadlineError::Syscall(unsafe { *__errno_location() })),
         _ => unreachable!("sched_getattr cannot return anything other than 0 or -1"),
     }
 }
@@ -103,11 +130,16 @@ pub fn configure_sched_deadline(
     runtime: Duration,
     deadline: Duration,
     period: Duration,
-) -> Result<(), c_int> {
+) -> Result<(), SchedDeadlineError> {
     let pid: pid_t = match target {
         Target::CallingThread => 0,
         Target::PID(pid) => pid,
     };
+
+    // TODO return proper return code
+    if runtime > deadline || deadline > period {
+        return Err(SchedDeadlineError::Logic);
+    }
 
     let sched_flags: c_int = sched_flags.bits() as c_int;
 
@@ -124,7 +156,7 @@ pub fn configure_sched_deadline(
 
     match unsafe { sched_setattr(pid, &attr as *const _, 0) } {
         0 => Ok(()),
-        -1 => Err(unsafe { *__errno_location() }),
+        -1 => Err(SchedDeadlineError::Syscall(unsafe { *__errno_location() })),
         _ => unreachable!("sched_setattr cannot return anything other than 0 or -1"),
     }
 }
@@ -201,7 +233,10 @@ mod tests {
             Duration::from_nanos(10 * 1000 * 1000),
         );
 
-        assert_eq!(ret, Err(libc::EPERM));
+        assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
+        if let Err(error) = ret {
+            format!("{}", error);
+        }
 
         let ret = super::configure_sched_deadline(
             super::Target::PID(unsafe { getpid() }),
@@ -211,7 +246,7 @@ mod tests {
             Duration::from_nanos(10 * 1000 * 1000),
         );
 
-        assert_eq!(ret, Err(libc::EPERM));
+        assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
 
         let ret = super::configure_sched_deadline(
             super::Target::PID(unsafe { syscall(SYS_gettid) }),
@@ -221,7 +256,7 @@ mod tests {
             Duration::from_nanos(10 * 1000 * 1000),
         );
 
-        assert_eq!(ret, Err(libc::EPERM));
+        assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
     }
 
     #[test]

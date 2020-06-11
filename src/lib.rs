@@ -4,6 +4,7 @@ use libc::{
     __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr, SYS_sched_setattr,
 };
 use std::convert::TryInto;
+use std::error::Error;
 use std::ffi::CStr;
 use std::fmt;
 use std::mem::size_of;
@@ -85,6 +86,8 @@ impl fmt::Display for SchedDeadlineError {
         }
     }
 }
+
+impl Error for SchedDeadlineError {}
 
 #[derive(BitFlags, Copy, Clone)]
 #[repr(u8)]

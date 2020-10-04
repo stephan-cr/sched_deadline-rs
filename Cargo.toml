@@ -9,3 +9,6 @@ edition = "2018"
 [dependencies]
 enumflags2 = "0.6"
 libc = "0.2.68"
+
+[dev-dependencies]
+caps = "0.4"

@@ -170,8 +170,11 @@ mod tests {
     use std::mem::size_of;
     use std::time::Duration;
 
+    use caps::{CapSet, Capability};
     use enumflags2::BitFlags;
-    use libc::{__errno_location, getpid, sched_yield, syscall, SYS_gettid, EPERM, SCHED_OTHER};
+    use libc::{
+        __errno_location, getpid, getuid, sched_yield, syscall, SYS_gettid, EPERM, SCHED_OTHER,
+    };
 
     #[test]
     fn test_get_setattr() {
@@ -216,10 +219,18 @@ mod tests {
         };
 
         let ret = unsafe { super::sched_setattr(0, &attr as *const _, 0) };
-        assert_eq!(ret, -1);
-        // TODO check if we have CAP_SYS_NICE capability or root
-        // access. In this case the following assertion fails.
-        assert_eq!(EPERM, unsafe { *__errno_location() });
+
+        // check if we have CAP_SYS_NICE capability or root access.
+        if caps::has_cap(None, CapSet::Permitted, Capability::CAP_SYS_NICE)
+            .expect("has_cap must not fail")
+            || unsafe { getuid() } == 0
+        {
+            assert_eq!(ret, 0);
+        } else {
+            assert_eq!(ret, -1);
+            // This is expected to fail if we don't have permission.
+            assert_eq!(EPERM, unsafe { *__errno_location() });
+        }
 
         unsafe {
             sched_yield();
@@ -228,6 +239,10 @@ mod tests {
 
     #[test]
     fn test_configure_sched_deadline() {
+        let has_permission = caps::has_cap(None, CapSet::Permitted, Capability::CAP_SYS_NICE)
+            .expect("has_cap must not fail")
+            || unsafe { getuid() } == 0;
+
         let ret = super::configure_sched_deadline(
             super::Target::CallingThread,
             BitFlags::from_flag(super::SchedFlag::ResetOnFork),
@@ -236,9 +251,13 @@ mod tests {
             Duration::from_nanos(10 * 1000 * 1000),
         );
 
-        assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
-        if let Err(error) = ret {
-            format!("{}", error);
+        if has_permission {
+            assert_eq!(ret, Ok(()));
+        } else {
+            assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
+            if let Err(error) = ret {
+                format!("{}", error);
+            }
         }
 
         let ret = super::configure_sched_deadline(
@@ -249,7 +268,11 @@ mod tests {
             Duration::from_nanos(10 * 1000 * 1000),
         );
 
-        assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
+        if has_permission {
+            assert_eq!(ret, Ok(()));
+        } else {
+            assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
+        }
 
         let ret = super::configure_sched_deadline(
             super::Target::PID(unsafe { syscall(SYS_gettid) }),
@@ -259,7 +282,11 @@ mod tests {
             Duration::from_nanos(10 * 1000 * 1000),
         );
 
-        assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
+        if has_permission {
+            assert_eq!(ret, Ok(()));
+        } else {
+            assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
+        }
     }
 
     #[test]

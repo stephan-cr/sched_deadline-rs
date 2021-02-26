@@ -219,13 +219,25 @@ mod tests {
             sched_period_ns: 10 * 1000 * 1000, // in nanoseconds
         };
 
-        let ret = unsafe { super::sched_setattr(0, &attr as *const _, 0) };
+        let has_cap_sys_nice = caps::has_cap(None, CapSet::Permitted, Capability::CAP_SYS_NICE)
+            .expect("has_cap must not fail");
+
+        let ret = {
+            let _guard = if has_cap_sys_nice {
+                caps::raise(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                assert!(caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap());
+                Some(scopeguard::guard((), |_| {
+                    caps::drop(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                }))
+            } else {
+                None
+            };
+
+            unsafe { super::sched_setattr(0, &attr as *const _, 0) }
+        };
 
         // check if we have CAP_SYS_NICE capability or root access.
-        if caps::has_cap(None, CapSet::Permitted, Capability::CAP_SYS_NICE)
-            .expect("has_cap must not fail")
-            || unsafe { getuid() } == 0
-        {
+        if has_cap_sys_nice || unsafe { getuid() } == 0 {
             assert_eq!(ret, 0);
         } else {
             assert_eq!(ret, -1);
@@ -240,17 +252,29 @@ mod tests {
 
     #[test]
     fn test_configure_sched_deadline() {
-        let has_permission = caps::has_cap(None, CapSet::Permitted, Capability::CAP_SYS_NICE)
-            .expect("has_cap must not fail")
-            || unsafe { getuid() } == 0;
+        let has_cap_sys_nice = caps::has_cap(None, CapSet::Permitted, Capability::CAP_SYS_NICE)
+            .expect("has_cap must not fail");
+        let has_permission = has_cap_sys_nice || unsafe { getuid() } == 0;
 
-        let ret = super::configure_sched_deadline(
-            super::Target::CallingThread,
-            BitFlags::from_flag(super::SchedFlag::ResetOnFork),
-            Duration::from_nanos(1000 * 1000),
-            Duration::from_nanos(1000 * 1000),
-            Duration::from_nanos(10 * 1000 * 1000),
-        );
+        let ret = {
+            let _guard = if has_cap_sys_nice {
+                caps::raise(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                assert!(caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap());
+                Some(scopeguard::guard((), |_| {
+                    caps::drop(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                }))
+            } else {
+                None
+            };
+
+            super::configure_sched_deadline(
+                super::Target::CallingThread,
+                BitFlags::from_flag(super::SchedFlag::ResetOnFork),
+                Duration::from_nanos(1000 * 1000),
+                Duration::from_nanos(1000 * 1000),
+                Duration::from_nanos(10 * 1000 * 1000),
+            )
+        };
 
         if has_permission {
             assert_eq!(ret, Ok(()));
@@ -261,13 +285,25 @@ mod tests {
             }
         }
 
-        let ret = super::configure_sched_deadline(
-            super::Target::PID(unsafe { getpid() }),
-            super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
-            Duration::from_nanos(1000 * 1000),
-            Duration::from_nanos(1000 * 1000),
-            Duration::from_nanos(10 * 1000 * 1000),
-        );
+        let ret = {
+            let _guard = if has_cap_sys_nice {
+                caps::raise(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                assert!(caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap());
+                Some(scopeguard::guard((), |_| {
+                    caps::drop(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                }))
+            } else {
+                None
+            };
+
+            super::configure_sched_deadline(
+                super::Target::PID(unsafe { getpid() }),
+                super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
+                Duration::from_nanos(1000 * 1000),
+                Duration::from_nanos(1000 * 1000),
+                Duration::from_nanos(10 * 1000 * 1000),
+            )
+        };
 
         if has_permission {
             assert_eq!(ret, Ok(()));
@@ -275,13 +311,25 @@ mod tests {
             assert_eq!(ret, Err(super::SchedDeadlineError::Syscall(libc::EPERM)));
         }
 
-        let ret = super::configure_sched_deadline(
-            super::Target::PID(unsafe { syscall(SYS_gettid) }.try_into().unwrap()),
-            super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
-            Duration::from_nanos(1000 * 1000),
-            Duration::from_nanos(1000 * 1000),
-            Duration::from_nanos(10 * 1000 * 1000),
-        );
+        let ret = {
+            let _guard = if has_cap_sys_nice {
+                caps::raise(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                assert!(caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap());
+                Some(scopeguard::guard((), |_| {
+                    caps::drop(None, CapSet::Effective, Capability::CAP_SYS_NICE).unwrap();
+                }))
+            } else {
+                None
+            };
+
+            super::configure_sched_deadline(
+                super::Target::PID(unsafe { syscall(SYS_gettid) }.try_into().unwrap()),
+                super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
+                Duration::from_nanos(1000 * 1000),
+                Duration::from_nanos(1000 * 1000),
+                Duration::from_nanos(10 * 1000 * 1000),
+            )
+        };
 
         if has_permission {
             assert_eq!(ret, Ok(()));

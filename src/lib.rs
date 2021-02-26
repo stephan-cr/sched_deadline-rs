@@ -1,7 +1,7 @@
 #![warn(rust_2018_idioms)]
 
 use libc::{
-    __errno_location, c_int, c_long, c_uint, pid_t, strerror, syscall, SYS_sched_getattr,
+    __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr,
     SYS_sched_setattr,
 };
 use std::convert::TryInto;
@@ -51,8 +51,10 @@ pub(crate) unsafe fn sched_getattr(
     attr: *mut sched_attr,
     size: c_uint,
     flags: c_uint,
-) -> c_long {
+) -> c_int {
     syscall(SYS_sched_getattr, pid, attr, size, flags)
+        .try_into()
+        .unwrap()
 }
 
 /// In order to be successful, the process needs the CAP_SYS_NICE
@@ -63,8 +65,10 @@ pub(crate) unsafe fn sched_getattr(
 /// `sched_setattr` checks its pointer argument for null before it
 /// dereferences the pointer. If the pointer is null it returns
 /// `libc::EINVAL`.
-pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c_uint) -> c_long {
+pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c_uint) -> c_int {
     syscall(SYS_sched_setattr, pid, attr, flags)
+        .try_into()
+        .unwrap()
 }
 
 #[derive(Debug, PartialEq)]

@@ -1,7 +1,8 @@
 #![warn(rust_2018_idioms)]
 
 use libc::{
-    __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr, SYS_sched_setattr,
+    __errno_location, c_int, c_long, c_uint, pid_t, strerror, syscall, SYS_sched_getattr,
+    SYS_sched_setattr,
 };
 use std::convert::TryInto;
 use std::error::Error;
@@ -50,7 +51,7 @@ pub(crate) unsafe fn sched_getattr(
     attr: *mut sched_attr,
     size: c_uint,
     flags: c_uint,
-) -> c_int {
+) -> c_long {
     syscall(SYS_sched_getattr, pid, attr, size, flags)
 }
 
@@ -62,7 +63,7 @@ pub(crate) unsafe fn sched_getattr(
 /// `sched_setattr` checks its pointer argument for null before it
 /// dereferences the pointer. If the pointer is null it returns
 /// `libc::EINVAL`.
-pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c_uint) -> c_int {
+pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c_uint) -> c_long {
     syscall(SYS_sched_setattr, pid, attr, flags)
 }
 
@@ -194,7 +195,7 @@ mod tests {
 
         let ret = unsafe {
             super::sched_getattr(
-                syscall(SYS_gettid),
+                syscall(SYS_gettid).try_into().unwrap(),
                 &mut attr as *mut _,
                 size_of::<super::sched_attr>().try_into().unwrap(),
                 0,
@@ -275,7 +276,7 @@ mod tests {
         }
 
         let ret = super::configure_sched_deadline(
-            super::Target::PID(unsafe { syscall(SYS_gettid) }),
+            super::Target::PID(unsafe { syscall(SYS_gettid) }.try_into().unwrap()),
             super::SchedFlag::ResetOnFork | super::SchedFlag::Reclaim,
             Duration::from_nanos(1000 * 1000),
             Duration::from_nanos(1000 * 1000),

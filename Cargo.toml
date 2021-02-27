@@ -1,13 +1,13 @@
 [package]
 name = "sched_deadline"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Stephan Creutz <stephan.cr@gmx.de>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 edition = "2018"
 
 [dependencies]
-enumflags2 = "0.6"
+flagset = "0.4"
 libc = "0.2.68"
 
 [dev-dependencies]

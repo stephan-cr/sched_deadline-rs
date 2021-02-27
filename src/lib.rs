@@ -1,8 +1,7 @@
 #![warn(rust_2018_idioms)]
 
 use libc::{
-    __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr,
-    SYS_sched_setattr,
+    __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr, SYS_sched_setattr,
 };
 use std::convert::TryInto;
 use std::error::Error;
@@ -12,7 +11,7 @@ use std::mem::size_of;
 use std::result::Result;
 use std::time::Duration;
 
-use enumflags2::BitFlags;
+use flagset::{flags, FlagSet};
 
 #[repr(C)]
 #[derive(Default)]
@@ -94,12 +93,12 @@ impl fmt::Display for SchedDeadlineError {
 
 impl Error for SchedDeadlineError {}
 
-#[derive(BitFlags, Copy, Clone)]
-#[repr(u8)]
-pub enum SchedFlag {
-    ResetOnFork = 0x1,
-    Reclaim = 0x2,
-    DlOverrun = 0x4,
+flags! {
+    pub enum SchedFlag: u8 {
+        ResetOnFork = 0x1,
+        Reclaim = 0x2,
+        DlOverrun = 0x4,
+    }
 }
 
 pub enum Target {
@@ -134,7 +133,7 @@ pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, SchedDeadlineEr
 
 pub fn configure_sched_deadline(
     target: Target,
-    sched_flags: BitFlags<SchedFlag>,
+    sched_flags: impl Into<FlagSet<SchedFlag>>,
     runtime: Duration,
     deadline: Duration,
     period: Duration,
@@ -149,7 +148,7 @@ pub fn configure_sched_deadline(
         return Err(SchedDeadlineError::Logic);
     }
 
-    let sched_flags: c_int = sched_flags.bits() as c_int;
+    let sched_flags: c_int = sched_flags.into().bits() as c_int;
 
     let attr: sched_attr = sched_attr {
         size: size_of::<sched_attr>().try_into().unwrap(),
@@ -176,7 +175,6 @@ mod tests {
     use std::time::Duration;
 
     use caps::{CapSet, Capability};
-    use enumflags2::BitFlags;
     use libc::{
         __errno_location, getpid, getuid, sched_yield, syscall, SYS_gettid, EPERM, SCHED_OTHER,
     };
@@ -273,7 +271,7 @@ mod tests {
 
             super::configure_sched_deadline(
                 super::Target::CallingThread,
-                BitFlags::from_flag(super::SchedFlag::ResetOnFork),
+                super::SchedFlag::ResetOnFork,
                 Duration::from_nanos(1000 * 1000),
                 Duration::from_nanos(1000 * 1000),
                 Duration::from_nanos(10 * 1000 * 1000),

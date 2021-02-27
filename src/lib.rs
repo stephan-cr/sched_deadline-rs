@@ -45,6 +45,17 @@ pub const SCHED_FLAG_DL_OVERRUN: c_int = 0x04;
 /// `sched_getattr` checks its pointer argument for null before it
 /// dereferences the pointer. If the pointer is null it returns
 /// `libc::EINVAL`.
+#[cfg(target_pointer_width = "32")]
+pub(crate) unsafe fn sched_getattr(
+    pid: pid_t,
+    attr: *mut sched_attr,
+    size: c_uint,
+    flags: c_uint,
+) -> c_int {
+    syscall(SYS_sched_getattr, pid, attr, size, flags)
+}
+
+#[cfg(target_pointer_width = "64")]
 pub(crate) unsafe fn sched_getattr(
     pid: pid_t,
     attr: *mut sched_attr,
@@ -64,6 +75,12 @@ pub(crate) unsafe fn sched_getattr(
 /// `sched_setattr` checks its pointer argument for null before it
 /// dereferences the pointer. If the pointer is null it returns
 /// `libc::EINVAL`.
+#[cfg(target_pointer_width = "32")]
+pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c_uint) -> c_int {
+    syscall(SYS_sched_setattr, pid, attr, flags)
+}
+
+#[cfg(target_pointer_width = "64")]
 pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c_uint) -> c_int {
     syscall(SYS_sched_setattr, pid, attr, flags)
         .try_into()

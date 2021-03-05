@@ -4,7 +4,12 @@ version = "0.2.0"
 authors = ["Stephan Creutz <stephan.cr@gmx.de>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/stephan-cr/rust_sched_deadline"
+homepage = "https://github.com/stephan-cr/rust_sched_deadline"
+keywords = ["linux", "realtime", "sched-deadline"]
+categories = ["api-bindings", "os::linux-apis"]
 edition = "2018"
+exclude = [".gitignore", "/.github/*"]
 
 [dependencies]
 flagset = "0.4"

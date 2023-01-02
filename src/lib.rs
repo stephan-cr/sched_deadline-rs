@@ -9,6 +9,7 @@ use std::error::Error;
 use std::ffi::CStr;
 use std::fmt;
 use std::mem::size_of;
+use std::ptr::{addr_of, addr_of_mut};
 use std::result::Result;
 use std::time::Duration;
 
@@ -88,7 +89,7 @@ pub(crate) unsafe fn sched_setattr(pid: pid_t, attr: *const sched_attr, flags: c
         .unwrap()
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum SchedDeadlineError {
     Syscall(c_int),
     Logic,
@@ -107,7 +108,7 @@ impl fmt::Display for SchedDeadlineError {
                 // string. In case `libc::strerror_r` return non-zero,
                 // we panic.
                 if unsafe { strerror_r(*error_num, buf.as_mut_ptr(), buf.len()) } != 0 {
-                    panic!("libc::strerror_r failed")
+                    panic!("libc::strerror_r failed");
                 }
                 write!(
                     f,
@@ -129,6 +130,7 @@ flags! {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Target {
     /// Apply deadline scheduling to calling thread
     CallingThread,
@@ -148,7 +150,7 @@ pub fn is_sched_deadline_enabled(target: Target) -> Result<bool, SchedDeadlineEr
     match unsafe {
         sched_getattr(
             pid,
-            &mut attr as *mut _,
+            addr_of_mut!(attr),
             size_of::<sched_attr>().try_into().unwrap(),
             0,
         )
@@ -189,7 +191,7 @@ pub fn configure_sched_deadline(
         sched_period_ns: period.as_nanos() as u64,     // in nanoseconds
     };
 
-    match unsafe { sched_setattr(pid, &attr as *const _, 0) } {
+    match unsafe { sched_setattr(pid, addr_of!(attr), 0) } {
         0 => Ok(()),
         -1 => Err(SchedDeadlineError::Syscall(unsafe { *__errno_location() })),
         _ => unreachable!("sched_setattr cannot return anything other than 0 or -1"),

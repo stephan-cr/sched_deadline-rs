@@ -1,7 +1,8 @@
 #![warn(rust_2018_idioms)]
 
 use libc::{
-    __errno_location, c_int, c_uint, pid_t, strerror, syscall, SYS_sched_getattr, SYS_sched_setattr,
+    __errno_location, c_char, c_int, c_uint, pid_t, strerror_r, syscall, SYS_sched_getattr,
+    SYS_sched_setattr,
 };
 use std::convert::TryInto;
 use std::error::Error;
@@ -95,15 +96,25 @@ pub enum SchedDeadlineError {
 
 impl fmt::Display for SchedDeadlineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &*self {
+        match self {
             SchedDeadlineError::Logic => write!(f, "logical error"),
-            SchedDeadlineError::Syscall(error_num) => write!(
-                f,
-                "{}",
-                unsafe { CStr::from_ptr(strerror(*error_num)) }
-                    .to_string_lossy()
-                    .to_owned()
-            ),
+            SchedDeadlineError::Syscall(error_num) => {
+                let mut buf = [0 as c_char; 128];
+                // # Safety
+                //
+                // If `libc::strerror_r` returns 0, it is guaranteed
+                // that it filled the buffer with a zero terminated
+                // string. In case `libc::strerror_r` return non-zero,
+                // we panic.
+                if unsafe { strerror_r(*error_num, buf.as_mut_ptr(), buf.len()) } != 0 {
+                    panic!("libc::strerror_r failed")
+                }
+                write!(
+                    f,
+                    "{}",
+                    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy()
+                )
+            }
         }
     }
 }

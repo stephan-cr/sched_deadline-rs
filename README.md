@@ -5,7 +5,7 @@ sched\_deadline - Setup SCHED\_DEADLINE in Rust
 
 ```toml
 [dependencies]
-sched_deadline = { git = "https://github.com/stephan-cr/rust_sched_deadline" }
+sched_deadline = { git = "https://github.com/stephan-cr/sched_deadline-rs" }
 ```
 
 ## Execution
